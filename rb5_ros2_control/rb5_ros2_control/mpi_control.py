@@ -32,15 +32,17 @@ class MegaPiController:
         self.lx = .06747
         self.ly = .05635
         self.radius = .03016
-        self.drive_multiplier = 10
-        self.turn_multiplier = 12
+        self.drive_multiplier = 8.2 # MODIFY TO CHANGE DRIVING SPEED
+        self.turn_multiplier = 7.7 # 9 # MODIFY TO CHANGE TURNING SPEED
+        self.turn_offset = 0.3 # additional time to buffer turning sequence
+        self.straight_drift_bias = 1.05 # which way to bias straight movement
 
         self.kinematics = np.array([
             [1, -1, -1 * (self.lx + self.ly)],
             [1, 1, (self.lx + self.ly)],
             [1, 1, -1 * (self.lx + self.ly)],
             [1, -1, (self.lx + self.ly)]
-        ])
+        ]) # 4 x 3
 
 
 
@@ -87,8 +89,8 @@ class MegaPiController:
 
     def velocityToWheel(self, velocity):
         wheel_speeds = 1 / self.radius * np.dot(self.kinematics, velocity) 
-        print("Wheel speeds")
-        print(wheel_speeds)
+        #print("Wheel speeds")
+        #print(wheel_speeds)
         # print("------------------")
         return wheel_speeds
     
@@ -103,15 +105,17 @@ class MegaPiController:
 
 
     def carStraightDistance(self, distance):
-        fixed_robot_speed = .1 #m/s
+        fixed_robot_speed = .2 #m/s
 
         if distance < 0:
             fixed_robot_speed = -1 * fixed_robot_speed
 
         dt = distance / fixed_robot_speed
         wheel_speeds = self.velocityToWheel(np.array([-1 * fixed_robot_speed, 0, 0]))
+        wheel_speeds[1] = wheel_speeds[1] / self.straight_drift_bias
+        wheel_speeds[3] = wheel_speeds[3] / self.straight_drift_bias
         self.setFourMotorsNew(wheel_speeds * self.drive_multiplier)
-        print(dt)
+        print('Moving', wheel_speeds, 'for', dt, 'seconds')
         time.sleep(dt)
         self.carStop()
 
@@ -124,7 +128,8 @@ class MegaPiController:
         dt = angle / fixed_robot_turn_speed
         wheel_speeds = self.velocityToWheel(np.array([0, 0, fixed_robot_turn_speed]))
         self.setFourMotorsNew(wheel_speeds * self.turn_multiplier)
-        time.sleep(dt)
+        print('Turning', wheel_speeds, 'for', dt+self.turn_offset, 'seconds')
+        time.sleep(dt + self.turn_offset) # factor in offset
         self.carStop()
 
     def generateTrajectory(distance, cruise_velocity, acceleration, dt):
@@ -222,38 +227,55 @@ if __name__ == "__main__":
     import time
     mpi_ctrl = MegaPiController(port='/dev/ttyUSB0', verbose=True)  
     time.sleep(1)
+    
+    unit_distance = 1.0
 
-    unit_distance = 0.4
+    #debug movement
+    #print('\n####    DEBUG    ####')
+    #mpi_ctrl.carTurnInPlace(1.57)
+    #time.sleep(800)
 
-    #start
-    mpi_ctrl.carStraightDistance(-unit_distance)
+    #start (0, 0, 0)
+    print('\n####    START    ####')
+    mpi_ctrl.carStraightDistance(-unit_distance) # backwards to waypoint 1
+    print('\n####    WAYPOINT 1    ####')
+    time.sleep(2)
+
+    #waypoint 1 (-1, 0, 0)
+    mpi_ctrl.carTurnInPlace(1.57) # turn 90*ccw to face waypoint 2 (positive y)
     time.sleep(0.5)
+    mpi_ctrl.carStraightDistance(unit_distance) # forwards to waypoint 2
+    print('\n####    WAYPOINT 2    ####')
+    time.sleep(2)
 
-    #waypoint 1
-    mpi_ctrl.carTurnInPlace(1.57)
-    mpi_ctrl.carStraightDistance(unit_distance)
+    #waypoint 2 (-1, 1, 1.57)
+    mpi_ctrl.carTurnInPlace(-1.57) # turn 90*cw to face wp3 angle (positive x)
     time.sleep(0.5)
+    mpi_ctrl.carStraightDistance(-unit_distance) # backwards to wp3
+    print('\n####    WAYPOINT 3    ####')
+    time.sleep(2)
 
-    #waypoint 2
-    mpi_ctrl.carTurnInPlace(-1.57)
-    mpi_ctrl.carStraightDistance(-unit_distance)
+    #waypoint 3 (-2, 1, 0)
+    mpi_ctrl.carTurnInPlace(-1.57) # turn 90*cw to face wp4 (negative y)
     time.sleep(0.5)
+    mpi_ctrl.carStraightDistance(-unit_distance) # backwards to wp4
+    time.sleep(0.5)
+    mpi_ctrl.carTurnInPlace(1.57/2) # turn 45*ccw to face waypoint 4 angle
+    print('\n####    WAYPOINT 4    ####')
+    time.sleep(2) # hold waypoint 4 0.5 sec
 
-    #waypoint 3
-    mpi_ctrl.carTurnInPlace(-1.57)
-    mpi_ctrl.carStraightDistance(-unit_distance)
-    time.sleep(0.5)
-
-    #waypoint 4
-    mpi_ctrl.carTurnInPlace(1.57/2)
-    mpi_ctrl.carStraightDistance(math.sqrt(2 * (unit_distance ** 2)))
-    time.sleep(0.5)
+    #waypoint 4 (-2, 2, -0.78)
+    mpi_ctrl.carStraightDistance(math.sqrt(2 * (unit_distance ** 2))) # diagonal to wp5
+    print('\n####    WAYPOINT 5    ####')
+    time.sleep(2)
 
     #waypoint 5
-    mpi_ctrl.carStraightDistance(math.sqrt(2 * (unit_distance ** 2)))
+    mpi_ctrl.carStraightDistance(math.sqrt(2 * (unit_distance ** 2))) # diagonal to wp 6
     time.sleep(0.5)
+    mpi_ctrl.carTurnInPlace(1.57/2) # turn 45*ccw to face wp6 angle
+    print('\n####    FINISH    ####')
+    time.sleep(2)
 
-    print("Finished Routine")
     #finish
     mpi_ctrl.carStop()
     mpi_ctrl.close()
