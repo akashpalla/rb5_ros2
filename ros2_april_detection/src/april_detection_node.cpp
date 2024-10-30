@@ -13,15 +13,17 @@
 
 using std::placeholders::_1;
 // camera parameters
-double distortion_coeff[5] = {0.022327, 
-                            -0.019742, 
-                            -0.000961, 
-                            0.000625, 
-                            0.000000};
+double distortion_coeff[5] = { 0.03544134, 
+				-0.05542397, 
+				-0.00046713, 
+				-0.00236669,  
+				0.0146666 };
 
-double intrinsics[9] = {691.01615,    0.     ,  954.51,
-                      0.     ,  690.10114,  540.77467,
-                      0.     ,    0.     ,    1.};
+
+double intrinsics[9] = 
+  {692.32779338,   0.,         912.82477959,
+    0.,         692.55609672, 574.129898,  
+    0. ,         0. ,          1. };
 
 const cv::Mat d(cv::Size(1, 5), CV_64FC1, distortion_coeff);
 const cv::Mat K(cv::Size(3, 3), CV_64FC1, intrinsics);
@@ -133,7 +135,6 @@ class AprilDetectionNode : public rclcpp::Node{
     }
     // callbacks
     void imageCallback(const sensor_msgs::msg::Image::SharedPtr msg){
-      
       cv_bridge::CvImagePtr img_cv = cv_bridge::toCvCopy(msg);
 
       // rectify and run detection (pair<vector<apriltag_pose_t>, cv::Mat>)
