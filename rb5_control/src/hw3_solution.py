@@ -19,40 +19,54 @@ class KalmanFilter(object):
         self.P = np.dot(np.dot(self.F, self.P), self.F.T) + self.Q
         return self.x
 
-    def update(self, z):
-        # print(self.x)
-        # print("update")
+    # sensor_measurements = [[tag_id, x,y], [tag_id,x,y]]
+    def update(self, sensor_measurements):
 
-        if len(self.x) == 3: # no april tags detected yet, only robot coords
+        if len(self.x) == 3 or sensor_measurements == []: # Skip update if no april tags are currently visible
             return self.x
+
+        visible_tag_count = len(sensor_measurements)
         
+        self.R = np.diag(np.full(visible_tag_count * 2, 0.6))         
+        self.H = np.zeros((visible_tag_count * 2, len(self.x)))
+        z = np.array([0.0] * visible_tag_count * 2) 
+        
+        theta_r = self.x[2]
+        # print(" SENSOR: {}".format(sensor_measurements))
+        for idx in range(len(sensor_measurements)):
+            tag_id = sensor_measurements[idx][0]
+            april_robot_pos_x = sensor_measurements[idx][1] 
+            april_robot_pos_y = sensor_measurements[idx][2]
+            # print(" {} - {} ".format(april_robot_pos_x, april_robot_pos_y))
+            z[idx*2] = april_robot_pos_x
+            z[idx*2 + 1] = april_robot_pos_y
+
+            self.H[idx*2][0] = -np.cos(theta_r)
+            self.H[idx*2][1] = -np.sin(theta_r)
+            self.H[idx*2][self.april_tags[tag_id]] = np.cos(theta_r)
+            self.H[idx*2][self.april_tags[tag_id] + 1] = np.sin(theta_r)
+
+
+
+            self.H[idx*2+1][0] = np.sin(theta_r)
+            self.H[idx*2+1][1] = -np.cos(theta_r)
+            self.H[idx*2+1][self.april_tags[tag_id]] = -np.sin(theta_r)
+            self.H[idx*2+1][self.april_tags[tag_id] + 1] = np.cos(theta_r)
+
+
         z0 = np.dot(self.H, self.x)
-        #Only factor in april tags currently visible
-        for idx in range(len(z)):
-            if z[idx] == 0:
-                z0[idx] = 0
-
-
-        # print("z: {} ".format(z))
-        # print(f"z0: {z0} ")
+        print(" H: {}".format(np.round(self.H,2)))  
+        print(" z: {} z0: {}".format(z, np.round(z0,2)))
         y = z - z0
-        # print("diff: {} ".format(np.round(y,2)))
-        # print(np.dot(self.H, np.dot(self.P, self.H.T)))
-        rounded_arr = np.round(self.x, 2)
-        # print(" P : {}".format(self.P))
-        # print("old state: {} ".format(rounded_arr))
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))
         self.x = self.x + np.dot(K, y)
-        # print("new {}".format(self.x))
         I = np.eye(len(self.x))
-        # print(np.dot(K, self.H))
         self.P = np.dot(np.dot(I - np.dot(K, self.H), self.P), 
         	(I - np.dot(K, self.H)).T)  
         
 
         rounded_arr = np.round(self.x, 2)
-
         print("new state: {} ".format(rounded_arr))
 
         return self.x
@@ -75,71 +89,40 @@ class KalmanFilter(object):
         dt = 1
         self.F = np.eye(self.n)
         self.H = np.array([1, 0, 0]).reshape(1, 3)
-        self.B = np.array([[dt, 0, 0], [0, dt, 0], [0, 0, 3* dt]])
+        self.B = np.array([[3 * dt, 0, 0], [0, 3 * dt, 0], [0, 0, 3 * dt]])
         self.Q = np.diag([.1, .1, .1]) if Q is None else Q
-        self.R = np.diag(np.full(2, 0.05)) if R is None else R
-        self.P = np.diag(np.full(self.n, 5)) if P is None else P
+        self.R = None
+        self.P = np.diag(np.full(self.n, 20)) if P is None else P
         self.x = np.array([0,0,0]) if x0 is None else x0
+        self.april_tags = {}
 
 
 
 
     def new_april_tag(self, id, april_robot_pos):
         april_world_pos = np.dot(self.robot_to_world_transform(), april_robot_pos)
+        self.april_tags[id] = len(self.x)
         print(" NEW APRIL TAG POS_WORLD: {} POS_ROBOT: {} ".format(april_world_pos, april_robot_pos))
 
         self.x = np.append(self.x, april_world_pos[:2])
-        new_Q = np.diag(np.full(len(self.x), 0))
-        new_Q[:3, :3] = self.Q[:3, :3]
-        self.Q = new_Q
+        # new_Q = np.diag(np.full(len(self.x), 0))
+        # new_Q[:3, :3] = self.Q[:3, :3]
+        # self.Q = new_Q
+        self.Q = np.diag(np.full(len(self.x), 0.1))
 
-        new_P = np.diag(np.full(len(self.x), 5))
+
+        new_P = np.diag(np.full(len(self.x), 20))
         new_P[:3, :3] = self.P[:3, :3]
         self.P = new_P
 
-        self.R = np.diag(np.full(len(self.x) - 3, 0.05))         
+        # self.R = np.diag(np.full(len(self.x) - 3, 0.05))         
         self.F = np.eye(len(self.x))
 
         new_B = np.zeros((len(self.x),3))
         new_B[:3, :3] = self.B[:3, :3]
         self.B = new_B
 
-        
-        self.H = np.zeros((len(self.x)-3, len(self.x)))
-        row = 0
-        theta_r = self.x[2]
-        while row < len(self.x)-3:
-            self.H[row][0] = -np.cos(theta_r)
-            self.H[row][1] = -np.sin(theta_r)
-            self.H[row+1][0] = np.sin(theta_r)
-            self.H[row+1][1] = -np.cos(theta_r)
-
-            self.H[row][(row // 2) * 2 + 3] = np.cos(theta_r)
-            self.H[row][(row // 2) * 2 + 4] = np.sin(theta_r)
-
-            self.H[row+1][(row // 2) * 2 + 3] = -np.sin(theta_r)
-            self.H[row+1][(row // 2) * 2 + 4] = np.cos(theta_r)
-
-            # x_ar = cos(theta) * (x_aw - xrw) + sin(theta) * (y_aw - y_rw)
-
-            # x_aw = x_r + x_a*cos(theta_r) - y_a*sin(theta_r) 
-            # y_r + x_a*sin(theta_r) + y_a*cos(theta_r)
-
-            # x_ar = cos(theta) * (x_aw - xrw) + sin(theta) * (y_aw - y_rw)
-            
-            # self.H[row][0] = 1
-            # self.H[row][1] = 0
-            # self.H[row+1][0] = 0
-            # self.H[row+1][1] = 1
-
-            # self.H[row][(row // 2) * 2 + 3] = np.cos(theta_r)
-            # self.H[row][(row // 2) * 2 + 4] = - np.sin(theta_r)
-
-            # self.H[row+1][(row // 2) * 2 + 3] = np.sin(theta_r)
-            # self.H[row+1][(row // 2) * 2 + 4] = np.cos(theta_r)
-
-            row += 2
-        
+                
         print(self.x)
 
 
@@ -163,24 +146,18 @@ class RobotStateEstimator(Node):
 
     def update_state(self, motor_input):
         
-        # print(self.kf.x)
-        # print(self.sensor_measurements)
-        # print("SENSOR")
         self.kf.predict(motor_input)
         if self.april_updated:
             self.current_state = self.kf.update(self.sensor_measurements)
             self.april_updated = False
 
-        # self.sensor_measurements = [0] * (len(self.kf.x) - 3)
         self.current_state = self.kf.x
-        # rounded_arr = np.round(self.current_state, 2)
-
-        # print("curr state: {} ".format(rounded_arr))
         return self.current_state
 
 
     def april_pose_callback(self, msg):
         if len(msg.poses) < 1:
+            self.sensor_measurements = []
             return
 
         pose_ids = msg.header.frame_id.split(',')[:-1]
@@ -195,16 +172,20 @@ class RobotStateEstimator(Node):
                 # if last argument of this line is not 1, it messes stuff up :P
                 self.kf.new_april_tag(tag_id, np.array([pose_camera_apriltag.position.z, -pose_camera_apriltag.position.x, 1]))
 
-        # print(self.april_tags)
 
-        april_robot_poses = [0] * (len(self.kf.x) - 3)
+        april_robot_poses = []
+
         for april_tag in range(len(pose_ids)):
-            tag_id = pose_ids[april_tag]
-            pose_camera_apriltag = msg.poses[april_tag]
             
-            idx = self.april_tags[tag_id]
-            april_robot_poses[idx-3] = pose_camera_apriltag.position.z
-            april_robot_poses[idx-2] = -pose_camera_apriltag.position.x
+            
+            tag_id = pose_ids[april_tag]
+            pose_camera_apriltag = msg.poses[april_tag]            
+
+            april_robot_pos_x = pose_camera_apriltag.position.z
+            april_robot_pos_y = -pose_camera_apriltag.position.x
+            april_robot_pose = [tag_id, april_robot_pos_x, april_robot_pos_y]
+            april_robot_poses.append(april_robot_pose)
+
         
         self.sensor_measurements = april_robot_poses
         self.april_updated = True
@@ -292,26 +273,48 @@ def coord(twist, current_state):
 def main(args=None):
     rclpy.init(args=args)
     robot_state_estimator = RobotStateEstimator()
-    waypoint = np.array([[0.0,0.0,0.0], 
-                         [0.4,0.0,0.0],
-                         [0.4,0.0,np.pi/2],
-                         [0.4,0.4,np.pi/2],
-                         [0.4,0.4,np.pi],
-                         [0.0,0.4,np.pi],
-                         [0.0,0.4,-np.pi/2],
-                         [0.0,0.0,-np.pi/2],
-                         [0.0,0.0,0.0],
-                         [0.4,0.0,0.0]
-                         ])
+    waypoint_square = np.array([[0.0,0.0,0.0], 
+                         [1.0,0.0,0.0],
+                         [1.0,0.0,np.pi/2],
+                         [1.0,1.0, np.pi/2],
+                         [1.0,1.0, np.pi],
+                         [0.0,1.0, np.pi],
+                         [0.0,1.0,1.5 * np.pi],
+                         [0.0,0.0,1.5*np.pi],
+                         [0.0,0.0,0],
+                         [1.0,0.0,0.0]]
+                         )
+
+    waypoint_octagon = np.array([
+        [0.0,0.0,0.0],
+        [0.414, 0.0,0.0],
+        [0.414, 0.0,np.pi/4],
+        [0.707, 0.293,np.pi/4],
+        [0.707, 0.293, np.pi/2],
+        [0.707, 0.707, np.pi/2],
+        [0.707, 0.707, 3.0/4.0 * np.pi],
+        [0.414, 1.0, 3.0/4.0 * np.pi],
+        [0.414, 1.0, np.pi],
+        [0.0, 1.0, np.pi],
+        [0.0, 1.0, 5.0 / 4.0 * np.pi],
+        [-.293, .707, 5.0/4.0 * np.pi],
+        [-.293, .707, 3.0/2.0 * np.pi],
+        [-.293, .293, 3.0/2.0 * np.pi],
+        [-.293, .293, 7.0/4.0 * np.pi],
+        [0.0, 0.0, 7.0/4.0 * np.pi],
+        [0.0,0.0,0.0]
+    ])
+    
+    
 
 
     # init pid controller
-    pid = PIDcontroller(0.035,0.005,0.05)
+    pid = PIDcontroller(0.035,0.009,0.05)
     current_state = robot_state_estimator.current_state[:3]
     rclpy.spin_once(robot_state_estimator)
 
 
-    for wp in waypoint:
+    for wp in waypoint_octagon:
         print("move to way point", wp)
         # set wp as the target point
         pid.setTarget(wp)
@@ -344,5 +347,3 @@ def main(args=None):
    
 if __name__ == '__main__':
     main()
-
-
