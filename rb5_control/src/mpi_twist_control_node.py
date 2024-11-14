@@ -13,22 +13,25 @@ class MegaPiControllerNode(Node):
     def __init__(self, verbose=False, debug=False):
         super().__init__('megapi_controller_node')
         self.mpi_ctrl = MegaPiController(port='/dev/ttyUSB0', verbose=verbose)
-        self.r = 0.025 # radius of the wheel
-        self.lx = 0.055 # half of the distance between front wheel and back wheel
-        self.ly = 0.07 # half of the distance between left wheel and right wheel
-        self.calibration = 100.0
+        # self.r = 0.025 # radius of the wheel
+        # self.lx = 0.055 # half of the distance between front wheel and back wheel
+        # self.ly = 0.07 # half of the distance between left wheel and right wheel
+        self.lx = .06747
+        self.ly = .05635
+        self.r = .03016
+        self.calibration = 150.0
         self.subscription = self.create_subscription(Twist, '/twist', self.twist_callback, 10)
         self.subscription
 
     def twist_callback(self, twist_cmd):
-        desired_twist = self.calibration * np.array([[twist_cmd.linear.x], [twist_cmd.linear.y], [twist_cmd.angular.z]])
+        desired_twist = self.calibration * np.array([[twist_cmd.linear.x], [twist_cmd.linear.y], [3*twist_cmd.angular.z]])
         # calculate the jacobian matrix
-        jacobian_matrix = np.array([[1, -1, -(self.lx + self.ly)],
-                                     [1, 1, (self.lx + self.ly)],
+        jacobian_matrix = np.array([[1, -1, (self.lx + self.ly)],
                                      [1, 1, -(self.lx + self.ly)],
-                                     [1, -1, (self.lx + self.ly)]]) / self.r
+                                     [1, 1, (self.lx + self.ly)],
+                                     [1, -1, -(self.lx + self.ly)]]) / self.r
         # calculate the desired wheel velocity
-        result = np.dot(jacobian_matrix, desired_twist)
+        result = -1*np.dot(jacobian_matrix, desired_twist)
 
         # send command to each wheel
         self.mpi_ctrl.setFourMotors(result[0][0], result[1][0], result[2][0], result[3][0])

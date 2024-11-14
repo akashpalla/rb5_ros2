@@ -20,7 +20,7 @@ class PIDcontroller(Node):
         self.target = None
         self.I = np.array([0.0,0.0,0.0])
         self.lastError = np.array([0.0,0.0,0.0])
-        self.timestep = 0.1
+        self.timestep = 0.05
         self.maximumValue = 0.1
         self.publisher_ = self.create_publisher(Twist, '/twist', 10)
 
@@ -109,13 +109,7 @@ if __name__ == "__main__":
                          [0.5,1.0,np.pi],
                          [0.0,0.0,0.0]]
                         )
-                         
-                         
-                        #  ,
-                        #  [-2.0,1.0,0.0],
-                        #  [-2.0,2.0,-np.pi/2.0],
-                        #  [-1.0,1.0,-np.pi/4.0],
-                        #  [0.0,0.0,0.0]]) 
+
 
     # init pid controller
     pid = PIDcontroller(0.02,0.005,0.005)
@@ -142,6 +136,8 @@ if __name__ == "__main__":
         while(np.linalg.norm(pid.getError(current_state, wp)) > 0.05): # check the error between current state and current way point
             # calculate the current twist
             update_value = pid.update(current_state)
+            print(update_value)
+            print(current_state)
             # publish the twist
             pid.publisher_.publish(genTwistMsg(coord(update_value, current_state)))
             #print(coord(update_value, current_state))

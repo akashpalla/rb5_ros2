@@ -6,7 +6,7 @@ import rclpy
 from rclpy.node import Node
 import tf2_ros
 import geometry_msgs.msg
-from geometry_msgs.msg  import PoseStamped, TransformStamped, Quaternion, Pose
+from geometry_msgs.msg  import PoseStamped, TransformStamped, PoseArray, Quaternion, Pose
 import numpy as np
 import time
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
@@ -29,7 +29,42 @@ class AprilToWorldCoords(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.timer = self.create_timer(1, self.check_transform)
-   
+
+        self.subscription = self.create_subscription(
+            PoseArray,
+            '/april_poses',
+            self.april_pose_callback,
+            10)
+
+    
+    def april_pose_callback(self, msg):
+        # Log the number of poses in the PoseArray
+        self.pose_updated = False
+        
+        if len(msg.poses) < 1:
+            return
+    
+
+        S= np.array([1,1,0,1    .4,0])
+        theta_r = S[2]
+        # Define measurement matrix H
+        H = np.array([
+            [-np.cos(theta_r), -np.sin(theta_r), 0, np.cos(theta_r), np.sin(theta_r)],
+            [np.sin(theta_r), -np.cos(theta_r), 0, -np.sin(theta_r), np.cos(theta_r)]
+        ])
+        prediction = np.dot(H,S)
+        print(prediction)
+
+
+        pose_ids = msg.header.frame_id.split(',')[:-1]
+        
+        # we will only use one landmark at a time in homework 2. in homework 3, all landmarks should be considered.
+        tag_id = pose_ids[0]
+        pose_camera_apriltag = msg.poses[0]   # syntax: pose_ReferenceFrame_TargetFrame
+    
+        actual = [pose_camera_apriltag.position.z, pose_camera_apriltag.position.x ]
+        print(actual)
+
 
     def check_transform(self):
         

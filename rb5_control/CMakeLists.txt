@@ -28,6 +28,8 @@ install(
   src/mpi_control.py
   src/coord_converter.py
   src/hw2.py
+  src/hw2_solution.py
+  src/hw3_solution.py
   DESTINATION lib/${PROJECT_NAME}
 )
 
