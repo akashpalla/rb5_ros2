@@ -55,8 +55,8 @@ class KalmanFilter(object):
 
 
         z0 = np.dot(self.H, self.x)
-        print(" H: {}".format(np.round(self.H,2)))  
-        print(" z: {} z0: {}".format(z, np.round(z0,2)))
+        # print(" H: {}".format(np.round(self.H,2)))  
+        # print(" z: {} z0: {}".format(z, np.round(z0,2)))
         y = z - z0
         S = self.R + np.dot(self.H, np.dot(self.P, self.H.T))
         K = np.dot(np.dot(self.P, self.H.T), np.linalg.inv(S))
@@ -102,7 +102,7 @@ class KalmanFilter(object):
     def new_april_tag(self, id, april_robot_pos):
         april_world_pos = np.dot(self.robot_to_world_transform(), april_robot_pos)
         self.april_tags[id] = len(self.x)
-        print(" NEW APRIL TAG POS_WORLD: {} POS_ROBOT: {} ".format(april_world_pos, april_robot_pos))
+        # print(" NEW APRIL TAG POS_WORLD: {} POS_ROBOT: {} ".format(april_world_pos, april_robot_pos))
 
         self.x = np.append(self.x, april_world_pos[:2])
         # new_Q = np.diag(np.full(len(self.x), 0))
@@ -282,8 +282,14 @@ def main(args=None):
                          [0.0,1.0,1.5 * np.pi],
                          [0.0,0.0,1.5*np.pi],
                          [0.0,0.0,0],
-                         [1.0,0.0,0.0]]
-                         )
+                         [1.0,0.0,0.0],
+                         [1.0,0.0,np.pi/2],
+                         [1.0,1.0, np.pi/2],
+                         [1.0,1.0, np.pi],
+                         [0.0,1.0, np.pi],
+                         [0.0,1.0,1.5 * np.pi],
+                         [0.0,0.0,1.5*np.pi],
+                         [0.0,0.0,0]])
 
     waypoint_octagon = np.array([
         [0.0,0.0,0.0],
@@ -309,7 +315,7 @@ def main(args=None):
 
 
     # init pid controller
-    pid = PIDcontroller(0.035,0.009,0.05)
+    pid = PIDcontroller(0.03,0.01,0.05)
     current_state = robot_state_estimator.current_state[:3]
     rclpy.spin_once(robot_state_estimator)
 
@@ -338,6 +344,7 @@ def main(args=None):
 
 
 
+    print(robot_state_estimator.kf.P)
     # stop the car and exit
     pid.publisher_.publish(genTwistMsg(np.array([0.0,0.0,0.0])))
 
