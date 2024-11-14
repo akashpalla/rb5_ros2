@@ -1,0 +1,6 @@
+<launch>
+  <node pkg="rb5_control" exec="april_tag_tf_publisher.py" name="april_tag_tf_publisher"/>
+  <node pkg="tf2_ros" type="static_transform_publisher" name="br" args="1 0 0 0 0 0 1 world_origin marker_0" />
+  <node pkg="rb5_control" exec="april_to_world_coords.py" name="april_to_world_coords_node"/>
+</launch>
+
